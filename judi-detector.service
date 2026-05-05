@@ -1,0 +1,20 @@
+[Unit]
+Description=Detektor Judi Online — IndoBERT Flask API
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/judi-detector
+Environment="HF_REPO_ID=username/indobert-judionline"
+Environment="HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ExecStart=/home/ubuntu/judi-detector/venv/bin/gunicorn \
+    --workers 2 \
+    --bind 0.0.0.0:5000 \
+    --timeout 120 \
+    --preload \
+    app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

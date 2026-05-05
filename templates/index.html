@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detektor Judi Online — IndoBERT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2e;
+    --accent: #ff3c3c;
+    --accent2: #3cffa0;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --card: #16161f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 16px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(255,60,60,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 680px;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 12px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+
+  h1 {
+    font-size: clamp(28px, 6vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.2s;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 14px;
+    font-family: 'Space Mono', monospace;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.3s;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.4s;
+  }
+
+  .input-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    padding: 16px;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+    transition: border-color 0.2s;
+    line-height: 1.6;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  .char-count {
+    text-align: right;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .char-count.warn { color: var(--accent); }
+
+  .btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: #ff5555;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(255,60,60,0.3);
+  }
+
+  .btn:active:not(:disabled) { transform: translateY(0); }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn .spinner {
+    display: none;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto;
+  }
+
+  .btn.loading .btn-text { display: none; }
+  .btn.loading .spinner { display: block; }
+
+  /* Result */
+  .result {
+    margin-top: 20px;
+    border-radius: 8px;
+    padding: 24px;
+    display: none;
+    animation: fadeUp 0.4s ease forwards;
+    border: 1px solid;
+  }
+
+  .result.judi {
+    background: rgba(255,60,60,0.06);
+    border-color: rgba(255,60,60,0.3);
+  }
+
+  .result.bukan_judi {
+    background: rgba(60,255,160,0.06);
+    border-color: rgba(60,255,160,0.3);
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .result-icon { font-size: 28px; }
+
+  .result-label {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .result.judi .result-label { color: var(--accent); }
+  .result.bukan_judi .result-label { color: var(--accent2); }
+
+  .bars { display: flex; flex-direction: column; gap: 10px; }
+
+  .bar-row { display: flex; flex-direction: column; gap: 4px; }
+
+  .bar-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 0%;
+  }
+
+  .bar-fill.judi-bar { background: var(--accent); }
+  .bar-fill.aman-bar { background: var(--accent2); }
+
+  .result-meta {
+    margin-top: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* History */
+  .history-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin: 32px 0 12px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.5s;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.6s;
+  }
+
+  .history-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    animation: fadeUp 0.3s ease forwards;
+  }
+
+  .history-item:hover { border-color: var(--muted); }
+
+  .history-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .history-dot.judi { background: var(--accent); }
+  .history-dot.bukan_judi { background: var(--accent2); }
+
+  .history-teks {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-conf {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    float: right;
+    transition: all 0.2s;
+  }
+
+  .clear-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  footer {
+    margin-top: 48px;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.7s;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="badge">IndoBERT · NLP · Klasifikasi</div>
+    <h1>Detektor<br><span>Judi Online</span></h1>
+    <p class="subtitle">// model fine-tuned pada 10.230 komentar YouTube</p>
+  </header>
+
+  <div class="card">
+    <label class="input-label">Masukkan Komentar</label>
+    <textarea id="inputTeks" placeholder="Contoh: daftar sekarang bonus new member 100%..." maxlength="1000"></textarea>
+    <div class="char-count" id="charCount">0 / 1000</div>
+    <button class="btn" id="btnAnalisa" onclick="analisa()">
+      <span class="btn-text">Analisa Komentar</span>
+      <div class="spinner"></div>
+    </button>
+
+    <div class="result" id="result">
+      <div class="result-header">
+        <span class="result-icon" id="resultIcon"></span>
+        <span class="result-label" id="resultLabel"></span>
+      </div>
+      <div class="bars">
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>🎰 Judi Online</span>
+            <span id="probJudi">0%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill judi-bar" id="barJudi"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-meta">
+            <span>✅ Bukan Judi</span>
+            <span id="probAman">0%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill aman-bar" id="barAman"></div></div>
+        </div>
+      </div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+  </div>
+
+  <div id="historySection" style="display:none">
+    <div class="history-title">
+      Riwayat Analisa
+      <button class="clear-btn" onclick="clearHistory()">Hapus Semua</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <footer>IndoBERT fine-tuned · indobenchmark/indobert-base-p1</footer>
+</div>
+
+<script>
+  const textarea = document.getElementById('inputTeks');
+  const charCount = document.getElementById('charCount');
+  const btn = document.getElementById('btnAnalisa');
+  let history = JSON.parse(localStorage.getItem('judi_history') || '[]');
+
+  textarea.addEventListener('input', () => {
+    const n = textarea.value.length;
+    charCount.textContent = `${n} / 1000`;
+    charCount.className = 'char-count' + (n > 900 ? ' warn' : '');
+  });
+
+  textarea.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) analisa();
+  });
+
+  async function analisa() {
+    const teks = textarea.value.trim();
+    if (!teks) { textarea.focus(); return; }
+
+    btn.disabled = true;
+    btn.classList.add('loading');
+
+    try {
+      const res = await fetch('/api/prediksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teks })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal');
+      tampilkanHasil(data, teks);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+  }
+
+  function tampilkanHasil(data, teks) {
+    const el = document.getElementById('result');
+    el.className = 'result ' + data.label;
+    el.style.display = 'block';
+
+    document.getElementById('resultIcon').textContent = data.label === 'judi' ? '🎰' : '✅';
+    document.getElementById('resultLabel').textContent = data.label_text;
+    document.getElementById('resultMeta').textContent = `inferensi: ${data.ms}ms · confidence: ${data.confidence}%`;
+
+    document.getElementById('probJudi').textContent = data.prob_judi + '%';
+    document.getElementById('probAman').textContent = data.prob_bukan_judi + '%';
+
+    setTimeout(() => {
+      document.getElementById('barJudi').style.width = data.prob_judi + '%';
+      document.getElementById('barAman').style.width = data.prob_bukan_judi + '%';
+    }, 50);
+
+    // Simpan ke history
+    history.unshift({ teks, label: data.label, confidence: data.confidence, ms: data.ms });
+    if (history.length > 20) history.pop();
+    localStorage.setItem('judi_history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const section = document.getElementById('historySection');
+    const list = document.getElementById('historyList');
+    if (!history.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = history.map((h, i) => `
+      <div class="history-item" onclick="loadHistory(${i})">
+        <div class="history-dot ${h.label}"></div>
+        <span class="history-teks">${escHtml(h.teks)}</span>
+        <span class="history-conf">${h.confidence}%</span>
+      </div>
+    `).join('');
+  }
+
+  function loadHistory(i) {
+    textarea.value = history[i].teks;
+    charCount.textContent = `${history[i].teks.length} / 1000`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    textarea.focus();
+  }
+
+  function clearHistory() {
+    history = [];
+    localStorage.removeItem('judi_history');
+    renderHistory();
+  }
+
+  function escHtml(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  renderHistory();
+</script>
+</body>
+</html>
