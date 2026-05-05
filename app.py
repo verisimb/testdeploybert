@@ -143,12 +143,6 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/chat")
-def chat_ui():
-    """UI alternatif bergaya chat AI (template terpisah dari index.html)."""
-    return render_template("chat.html")
-
-
 @app.route("/api/prediksi", methods=["POST"])
 def api_prediksi():
     data = request.get_json()
