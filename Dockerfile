@@ -21,5 +21,8 @@ COPY templates/ templates/
 ENV PORT=5000
 EXPOSE 5000
 
+# 1 worker = latensi lebih stabil di CPU (2 worker sering rebutan core). Naikkan via GUNICORN_WORKERS jika perlu throughput.
+ENV GUNICORN_WORKERS=1
+
 # Timeout 180s untuk unduh model ONNX pertama kali; exec = gunicorn sebagai PID 1
-CMD exec gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 180 --preload app:app
+CMD exec gunicorn --workers ${GUNICORN_WORKERS:-1} --bind 0.0.0.0:$PORT --timeout 180 --preload app:app

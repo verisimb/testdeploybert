@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 from huggingface_hub import hf_hub_download
 import onnxruntime as ort
 import numpy as np
@@ -24,7 +24,9 @@ print(f"HF_REPO_ID: {HF_REPO_ID}", flush=True)
 print("Loading tokenizer dari Hugging Face…", flush=True)
 
 try:
-    tokenizer = BertTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
+    _tok_cls = type(tokenizer).__name__
+    print(f"Tokenizer: {_tok_cls}", flush=True)
 except Exception as e:
     import traceback
     print(f"❌ Gagal memuat tokenizer: {e}", flush=True)
@@ -87,6 +89,18 @@ except Exception as e:
 
 print("✅ ONNX model berhasil dimuat!", flush=True)
 
+_ORT_INPUT_ORDER = [inp.name for inp in session.get_inputs()]
+print(f"Input ONNX (urutan): {_ORT_INPUT_ORDER}", flush=True)
+
+
+def _feeds_from_enc(enc: dict) -> dict:
+    """Hanya kirim tensor yang diminta graf + contiguous (kurangi salinan di ORT)."""
+    return {
+        name: np.ascontiguousarray(enc[name])
+        for name in _ORT_INPUT_ORDER
+        if name in enc
+    }
+
 
 def prediksi(teks: str):
     start = time.time()
@@ -97,15 +111,13 @@ def prediksi(teks: str):
         truncation=True,
         padding=True,
     )
-    inputs = {
-        k: v
-        for k, v in enc.items()
-        if k in ("input_ids", "attention_mask", "token_type_ids")
-    }
-    logits = session.run(None, inputs)[0]
-    # Softmax numerik stabil
+    feeds = _feeds_from_enc(enc)
+    if len(feeds) != len(_ORT_INPUT_ORDER):
+        missing = set(_ORT_INPUT_ORDER) - set(feeds)
+        raise RuntimeError(f"Input ONNX hilang dari tokenizer: {missing}")
+    logits = session.run(None, feeds)[0]
     logits = logits[0]
-    m = np.max(logits)
+    m = float(np.max(logits))
     e = np.exp(logits - m)
     probs = e / e.sum()
     pred = int(np.argmax(probs))
@@ -118,6 +130,12 @@ def prediksi(teks: str):
         "prob_bukan_judi": round(float(probs[0]) * 100, 2),
         "ms": elapsed,
     }
+
+
+try:
+    prediksi("warmup satu kali untuk cache allocator")
+except Exception as _warm_e:
+    print(f"Peringatan warmup: {_warm_e}", flush=True)
 
 
 @app.route("/")
