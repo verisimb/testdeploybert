@@ -87,7 +87,7 @@ except Exception as e:
     traceback.print_exc()
     raise
 
-print("✅ ONNX model berhasil dimuat!", flush=True)
+print("ONNX model berhasil dimuat!", flush=True)
 
 _ORT_INPUT_ORDER = [inp.name for inp in session.get_inputs()]
 print(f"Input ONNX (urutan): {_ORT_INPUT_ORDER}", flush=True)
@@ -124,7 +124,7 @@ def prediksi(teks: str):
     elapsed = round((time.time() - start) * 1000, 1)
     return {
         "label": "judi" if pred == 1 else "bukan_judi",
-        "label_text": "🎰 Judi Online" if pred == 1 else "✅ Bukan Judi Online",
+        "label_text": "Judi Online" if pred == 1 else "Bukan Judi Online",
         "confidence": round(float(probs[pred]) * 100, 2),
         "prob_judi": round(float(probs[1]) * 100, 2),
         "prob_bukan_judi": round(float(probs[0]) * 100, 2),

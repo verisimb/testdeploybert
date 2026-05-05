@@ -377,14 +377,14 @@
       <div class="bars">
         <div class="bar-row">
           <div class="bar-meta">
-            <span>🎰 Judi Online</span>
+            <span>Judi Online</span>
             <span id="probJudi">0%</span>
           </div>
           <div class="bar-track"><div class="bar-fill judi-bar" id="barJudi"></div></div>
         </div>
         <div class="bar-row">
           <div class="bar-meta">
-            <span>✅ Bukan Judi</span>
+            <span>Bukan Judi</span>
             <span id="probAman">0%</span>
           </div>
           <div class="bar-track"><div class="bar-fill aman-bar" id="barAman"></div></div>
@@ -450,7 +450,7 @@
     el.className = 'result ' + data.label;
     el.style.display = 'block';
 
-    document.getElementById('resultIcon').textContent = data.label === 'judi' ? '🎰' : '✅';
+    document.getElementById('resultIcon').textContent = '';
     document.getElementById('resultLabel').textContent = data.label_text;
     document.getElementById('resultMeta').textContent = `inferensi: ${data.ms}ms · confidence: ${data.confidence}%`;
 
