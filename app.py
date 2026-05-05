@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
-from transformers import BertTokenizer, BertForSequenceClassification
-import torch
+from transformers import BertTokenizer
+from huggingface_hub import hf_hub_download
+import onnxruntime as ort
 import numpy as np
 import os
 import time
@@ -8,49 +9,101 @@ import time
 app = Flask(__name__)
 
 # ── Config ──
-# Ganti dengan repo ID HuggingFace kamu, contoh: "verysimbolon/indobert-judionline"
-HF_REPO_ID = os.environ.get("HF_REPO_ID", "username/indobert-judionline")
-HF_TOKEN   = os.environ.get("HF_TOKEN", "")   # HuggingFace token (wajib untuk repo privat)
-DEVICE     = torch.device("cpu")               # Oracle ARM CPU
+HF_REPO_ID = os.environ.get("HF_REPO_ID", "verisimb/testindobertjudol").strip()
+_raw_token = os.environ.get("HF_TOKEN", "").strip()
+HF_TOKEN = _raw_token or None  # None = akses anonim (repo public)
 
-if not HF_TOKEN:
-    raise RuntimeError("HF_TOKEN tidak ditemukan! Set environment variable HF_TOKEN.")
+if HF_TOKEN is None:
+    print(
+        "Peringatan: HF_TOKEN kosong — OK untuk model Hugging Face public. "
+        "Repo privat wajib set HF_TOKEN di Coolify.",
+        flush=True,
+    )
 
-print(f"Loading model dari HuggingFace: {HF_REPO_ID}")
-print(f"Device: {DEVICE}")
+print(f"HF_REPO_ID: {HF_REPO_ID}", flush=True)
+print("Loading tokenizer dari Hugging Face…", flush=True)
 
-tokenizer = BertTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
-model     = BertForSequenceClassification.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
-model     = model.to(DEVICE)
-model.eval()
+try:
+    tokenizer = BertTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
+except Exception as e:
+    import traceback
+    print(f"❌ Gagal memuat tokenizer: {e}", flush=True)
+    traceback.print_exc()
+    raise
 
-print("✅ Model berhasil dimuat!")
+print("Mengunduh / memuat ONNX model…", flush=True)
+try:
+    onnx_path = hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename="model.onnx",
+        token=HF_TOKEN,
+    )
+except Exception as e:
+    import traceback
+    print(f"❌ Gagal mengunduh model.onnx: {e}", flush=True)
+    traceback.print_exc()
+    raise
+
+print(f"Loading ONNX model dari: {onnx_path}", flush=True)
+
+_thread = int(os.environ.get("ONNX_NUM_THREADS", "2"))
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = _thread
+sess_options.inter_op_num_threads = _thread
+sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+try:
+    session = ort.InferenceSession(
+        onnx_path,
+        sess_options=sess_options,
+        providers=["CPUExecutionProvider"],
+    )
+except Exception as e:
+    import traceback
+    print(f"❌ Gagal memuat sesi ONNX: {e}", flush=True)
+    traceback.print_exc()
+    raise
+
+print("✅ ONNX model berhasil dimuat!", flush=True)
+
 
 def prediksi(teks: str):
     start = time.time()
     enc = tokenizer(
         teks,
-        return_tensors="pt",
+        return_tensors="np",
         max_length=128,
         truncation=True,
-        padding=True
-    ).to(DEVICE)
-    with torch.no_grad():
-        probs = torch.softmax(model(**enc).logits, dim=-1)[0].cpu().numpy()
-    elapsed = round((time.time() - start) * 1000, 1)
+        padding=True,
+    )
+    inputs = {
+        k: v
+        for k, v in enc.items()
+        if k in ("input_ids", "attention_mask", "token_type_ids")
+    }
+    logits = session.run(None, inputs)[0]
+    # Softmax numerik stabil
+    logits = logits[0]
+    m = np.max(logits)
+    e = np.exp(logits - m)
+    probs = e / e.sum()
     pred = int(np.argmax(probs))
+    elapsed = round((time.time() - start) * 1000, 1)
     return {
         "label": "judi" if pred == 1 else "bukan_judi",
         "label_text": "🎰 Judi Online" if pred == 1 else "✅ Bukan Judi Online",
         "confidence": round(float(probs[pred]) * 100, 2),
         "prob_judi": round(float(probs[1]) * 100, 2),
         "prob_bukan_judi": round(float(probs[0]) * 100, 2),
-        "ms": elapsed
+        "ms": elapsed,
     }
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 @app.route("/api/prediksi", methods=["POST"])
 def api_prediksi():
@@ -62,8 +115,8 @@ def api_prediksi():
         return jsonify({"error": "Teks tidak boleh kosong"}), 400
     if len(teks) > 1000:
         return jsonify({"error": "Teks maksimal 1000 karakter"}), 400
-    hasil = prediksi(teks)
-    return jsonify(hasil)
+    return jsonify(prediksi(teks))
+
 
 @app.route("/api/batch", methods=["POST"])
 def api_batch():
@@ -76,9 +129,13 @@ def api_batch():
     hasil = [{"teks": t, **prediksi(t)} for t in teks_list]
     return jsonify({"results": hasil, "total": len(hasil)})
 
+
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "model": HF_REPO_ID, "device": str(DEVICE)})
+    return jsonify(
+        {"status": "ok", "model": HF_REPO_ID, "runtime": "onnx", "device": "cpu"}
+    )
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
