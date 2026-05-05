@@ -15,8 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY templates/ templates/
 
-# Expose port
+# Port: Coolify/PaaS sering set env PORT — ikut agar proxy tidak 502 Bad Gateway
+ENV PORT=5000
 EXPOSE 5000
 
-# Jalankan dengan gunicorn
-CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:5000", "--timeout", "120", "--preload", "app:app"]
+# Shell form agar $PORT ter-expand; exec = PID 1 = gunicorn (signal shutdown benar)
+CMD exec gunicorn --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --preload app:app
