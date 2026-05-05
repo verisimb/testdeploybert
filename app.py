@@ -46,12 +46,32 @@ except Exception as e:
 
 print(f"Loading ONNX model dari: {onnx_path}", flush=True)
 
-_thread = int(os.environ.get("ONNX_NUM_THREADS", "2"))
+
+def _default_intra_threads() -> int:
+    """CPU untuk matmul BERT: default menyamai jumlah core (dibatasi) — bukan 2 seperti sebelumnya."""
+    try:
+        n = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        n = os.cpu_count() or 4
+    return max(1, min(n, 8))
+
+
+_intra = int(os.environ.get("ONNX_NUM_THREADS", str(_default_intra_threads())))
+_inter = int(os.environ.get("ONNX_INTER_OP_THREADS", "1"))
+print(
+    f"ONNX Runtime threads: intra_op={_intra}, inter_op={_inter} "
+    f"(override via ONNX_NUM_THREADS / ONNX_INTER_OP_THREADS)",
+    flush=True,
+)
+
 sess_options = ort.SessionOptions()
-sess_options.intra_op_num_threads = _thread
-sess_options.inter_op_num_threads = _thread
+sess_options.intra_op_num_threads = _intra
+sess_options.inter_op_num_threads = _inter
+# Graf BERT kebanyakan berantai; paralelisme utama dari intra_op (MatMul), inter_op=1 mengurangi overhead.
 sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+sess_options.enable_mem_pattern = True
+sess_options.enable_cpu_mem_arena = True
 
 try:
     session = ort.InferenceSession(

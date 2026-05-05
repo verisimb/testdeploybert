@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV OMP_NUM_THREADS=2
+# Jangan membatasi OMP ke 2 — memperlambat matmul/CPU; atur paralelisme lewat ONNX_NUM_THREADS di app.py
 ENV TOKENIZERS_PARALLELISM=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
