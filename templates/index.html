@@ -350,6 +350,167 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+
+  /* Mode Satu teks / Batch */
+  .mode-switch {
+    display: flex;
+    margin-bottom: 22px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: none;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .mode-tab + .mode-tab {
+    border-left: 1px solid var(--border);
+  }
+
+  .mode-tab:hover {
+    color: var(--text);
+    background: var(--card);
+  }
+
+  .mode-tab.active {
+    background: var(--card);
+    color: var(--accent);
+  }
+
+  .panel-hidden {
+    display: none !important;
+  }
+
+  .batch-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin: 6px 0 0;
+    line-height: 1.5;
+  }
+
+  .batch-hint.warn {
+    color: var(--accent);
+  }
+
+  .batch-result-wrap {
+    margin-top: 22px;
+    animation: fadeUp 0.4s ease forwards;
+  }
+
+  .batch-summary {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 14px;
+    line-height: 1.6;
+  }
+
+  .batch-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .batch-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    border-left: 3px solid var(--border);
+  }
+
+  .batch-row.judi {
+    border-left-color: var(--accent);
+    background: rgba(255, 60, 60, 0.04);
+  }
+
+  .batch-row.bukan_judi {
+    border-left-color: var(--accent2);
+    background: rgba(60, 255, 160, 0.04);
+  }
+
+  .batch-row-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-bottom: 8px;
+  }
+
+  .batch-idx {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .batch-badge {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .batch-row.judi .batch-badge {
+    color: var(--accent);
+  }
+
+  .batch-row.bukan_judi .batch-badge {
+    color: var(--accent2);
+  }
+
+  .batch-stat {
+    margin-left: auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .batch-teks {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .batch-mini-bars {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .batch-mini-bars .bar-row {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-left: none;
+  }
+
+  .batch-mini-bars .bar-track {
+    height: 4px;
+  }
 </style>
 </head>
 <body>
@@ -361,36 +522,58 @@
   </header>
 
   <div class="card">
-    <label class="input-label">Masukkan Komentar</label>
-    <textarea id="inputTeks" placeholder="Contoh: daftar sekarang bonus new member 100%..." maxlength="1000"></textarea>
-    <div class="char-count" id="charCount">0 / 1000</div>
-    <button class="btn" id="btnAnalisa" onclick="analisa()">
-      <span class="btn-text">Analisa Komentar</span>
-      <div class="spinner"></div>
-    </button>
+    <div class="mode-switch" role="tablist" aria-label="Mode analisa">
+      <button type="button" class="mode-tab active" data-mode="single" role="tab" aria-selected="true">Satu teks</button>
+      <button type="button" class="mode-tab" data-mode="batch" role="tab" aria-selected="false">Batch</button>
+    </div>
 
-    <div class="result" id="result">
-      <div class="result-header">
-        <span class="result-icon" id="resultIcon"></span>
-        <span class="result-label" id="resultLabel"></span>
-      </div>
-      <div class="bars">
-        <div class="bar-row">
-          <div class="bar-meta">
-            <span>Judi Online</span>
-            <span id="probJudi">0%</span>
-          </div>
-          <div class="bar-track"><div class="bar-fill judi-bar" id="barJudi"></div></div>
+    <div id="panelSingle" class="mode-panel">
+      <label class="input-label">Masukkan Komentar</label>
+      <textarea id="inputTeks" placeholder="Contoh: daftar sekarang bonus new member 100%..." maxlength="1000"></textarea>
+      <div class="char-count" id="charCount">0 / 1000</div>
+      <button class="btn" id="btnAnalisa" onclick="analisa()">
+        <span class="btn-text">Analisa Komentar</span>
+        <div class="spinner"></div>
+      </button>
+
+      <div class="result" id="result">
+        <div class="result-header">
+          <span class="result-icon" id="resultIcon"></span>
+          <span class="result-label" id="resultLabel"></span>
         </div>
-        <div class="bar-row">
-          <div class="bar-meta">
-            <span>Bukan Judi</span>
-            <span id="probAman">0%</span>
+        <div class="bars">
+          <div class="bar-row">
+            <div class="bar-meta">
+              <span>Judi Online</span>
+              <span id="probJudi">0%</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill judi-bar" id="barJudi"></div></div>
           </div>
-          <div class="bar-track"><div class="bar-fill aman-bar" id="barAman"></div></div>
+          <div class="bar-row">
+            <div class="bar-meta">
+              <span>Bukan Judi</span>
+              <span id="probAman">0%</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill aman-bar" id="barAman"></div></div>
+          </div>
         </div>
+        <div class="result-meta" id="resultMeta"></div>
       </div>
-      <div class="result-meta" id="resultMeta"></div>
+    </div>
+
+    <div id="panelBatch" class="mode-panel panel-hidden">
+      <label class="input-label">Batch — satu baris per teks</label>
+      <textarea id="inputBatch" placeholder="Baris 1: teks pertama&#10;Baris 2: teks kedua&#10;..." style="min-height: 220px"></textarea>
+      <div class="char-count" id="batchLineCount">0 baris · maks. 50</div>
+      <p class="batch-hint" id="batchHint">Tiap baris maks. 1000 karakter. Kosongkan baris yang tidak dipakai.</p>
+      <button type="button" class="btn" id="btnBatch" onclick="analisaBatch()">
+        <span class="btn-text">Analisa batch</span>
+        <div class="spinner"></div>
+      </button>
+      <div class="batch-result-wrap" id="batchResult" style="display:none">
+        <div class="batch-summary" id="batchSummary"></div>
+        <div class="batch-rows" id="batchRows"></div>
+      </div>
     </div>
   </div>
 
@@ -409,7 +592,136 @@
   const textarea = document.getElementById('inputTeks');
   const charCount = document.getElementById('charCount');
   const btn = document.getElementById('btnAnalisa');
+  const panelSingle = document.getElementById('panelSingle');
+  const panelBatch = document.getElementById('panelBatch');
+  const inputBatch = document.getElementById('inputBatch');
+  const batchLineCount = document.getElementById('batchLineCount');
+  const batchHint = document.getElementById('batchHint');
+  const btnBatch = document.getElementById('btnBatch');
+  const batchResult = document.getElementById('batchResult');
+  const batchSummary = document.getElementById('batchSummary');
+  const batchRows = document.getElementById('batchRows');
+
   let history = JSON.parse(localStorage.getItem('judi_history') || '[]');
+
+  function getBatchLines() {
+    const raw = inputBatch.value.split(/\r?\n/);
+    return raw.map((l) => l.trim()).filter(Boolean).slice(0, 50);
+  }
+
+  function updateBatchLineUi() {
+    const lines = inputBatch.value.split(/\r?\n/);
+    const allNonEmpty = lines.map((l) => l.trim()).filter(Boolean);
+    const nonEmpty = allNonEmpty.slice(0, 50);
+    const n = nonEmpty.length;
+    const over = nonEmpty.some((t) => t.length > 1000);
+    const truncated = allNonEmpty.length > 50;
+    batchLineCount.textContent = truncated
+      ? `${n} baris dipakai (maks. 50 — sisanya diabaikan)`
+      : `${n} baris · maks. 50`;
+    batchLineCount.className =
+      'char-count' + (n >= 45 || truncated || over ? ' warn' : '');
+    batchHint.className = 'batch-hint' + (over ? ' warn' : '');
+    if (over) {
+      batchHint.textContent = 'Ada baris lebih dari 1000 karakter — akan ditolak oleh server.';
+    } else {
+      batchHint.textContent =
+        'Tiap baris maks. 1000 karakter. Kosongkan baris yang tidak dipakai.';
+    }
+  }
+
+  document.querySelectorAll('.mode-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const mode = tab.dataset.mode;
+      document.querySelectorAll('.mode-tab').forEach((t) => {
+        t.classList.toggle('active', t === tab);
+        t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+      });
+      if (mode === 'single') {
+        panelSingle.classList.remove('panel-hidden');
+        panelBatch.classList.add('panel-hidden');
+      } else {
+        panelSingle.classList.add('panel-hidden');
+        panelBatch.classList.remove('panel-hidden');
+        inputBatch.focus();
+        updateBatchLineUi();
+      }
+    });
+  });
+
+  inputBatch.addEventListener('input', updateBatchLineUi);
+  inputBatch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) analisaBatch();
+  });
+
+  async function analisaBatch() {
+    const teksList = getBatchLines();
+    if (!teksList.length) {
+      inputBatch.focus();
+      return;
+    }
+    if (teksList.some((t) => t.length > 1000)) {
+      alert('Setiap baris maksimal 1000 karakter.');
+      return;
+    }
+
+    btnBatch.disabled = true;
+    btnBatch.classList.add('loading');
+
+    try {
+      const res = await fetch('/api/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teks_list: teksList }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal batch');
+
+      const results = data.results || [];
+      let nJudi = 0;
+      let totalMs = 0;
+      results.forEach((r) => {
+        if (r.label === 'judi') nJudi++;
+        totalMs += r.ms || 0;
+      });
+      const nAman = results.length - nJudi;
+
+      batchSummary.textContent = `Total ${data.total} teks · judi: ${nJudi} · bukan judi: ${nAman} · Σ inferensi: ${totalMs.toFixed(1)}ms`;
+
+      batchRows.innerHTML = results
+        .map((r, i) => {
+          const cls = r.label === 'judi' ? 'judi' : 'bukan_judi';
+          return `
+        <div class="batch-row ${cls}">
+          <div class="batch-row-head">
+            <span class="batch-idx">#${i + 1}</span>
+            <span class="batch-badge">${escHtml(r.label_text || '')}</span>
+            <span class="batch-stat">${r.confidence}% · ${r.ms}ms</span>
+          </div>
+          <div class="batch-teks">${escHtml(r.teks || '')}</div>
+          <div class="batch-mini-bars bars">
+            <div class="bar-row">
+              <div class="bar-meta"><span>Judi Online</span><span>${r.prob_judi}%</span></div>
+              <div class="bar-track"><div class="bar-fill judi-bar" style="width:${r.prob_judi}%"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-meta"><span>Bukan Judi</span><span>${r.prob_bukan_judi}%</span></div>
+              <div class="bar-track"><div class="bar-fill aman-bar" style="width:${r.prob_bukan_judi}%"></div></div>
+            </div>
+          </div>
+        </div>`;
+        })
+        .join('');
+
+      batchResult.style.display = 'block';
+      batchResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      btnBatch.disabled = false;
+      btnBatch.classList.remove('loading');
+    }
+  }
 
   textarea.addEventListener('input', () => {
     const n = textarea.value.length;
@@ -484,6 +796,8 @@
   }
 
   function loadHistory(i) {
+    const tabSingle = document.querySelector('.mode-tab[data-mode="single"]');
+    if (tabSingle && !tabSingle.classList.contains('active')) tabSingle.click();
     textarea.value = history[i].teks;
     charCount.textContent = `${history[i].teks.length} / 1000`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
