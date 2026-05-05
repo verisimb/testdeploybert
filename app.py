@@ -13,11 +13,6 @@ HF_REPO_ID = os.environ.get("HF_REPO_ID", "verisimb/testindobertjudol").strip()
 _raw_token = os.environ.get("HF_TOKEN", "").strip()
 HF_TOKEN = _raw_token or None  # None = akses anonim (repo public)
 
-_MAX_SEQ = int(os.environ.get("MAX_SEQ_LENGTH", "128"))
-_pad_mode = os.environ.get("TOKENIZER_PAD_MODE", "max_length").strip().lower()
-# max_length = bentuk [1, MAX_SEQ] statis (biasanya lebih ramah ORT). longest = pad ke panjang urutan (lebih sedikit FLOPs teks pendek).
-_TOKENIZER_PAD = _pad_mode if _pad_mode in ("max_length", "longest") else "max_length"
-
 if HF_TOKEN is None:
     print(
         "Peringatan: HF_TOKEN kosong — OK untuk model Hugging Face public. "
@@ -26,18 +21,17 @@ if HF_TOKEN is None:
     )
 
 print(f"HF_REPO_ID: {HF_REPO_ID}", flush=True)
-print(f"Tokenizer: pad={_TOKENIZER_PAD}, max_length={_MAX_SEQ}", flush=True)
 print("Loading tokenizer dari Hugging Face…", flush=True)
 
 try:
-    tokenizer = AutoTokenizer.from_pretrained(
-        HF_REPO_ID, token=HF_TOKEN, use_fast=True
-    )
-except (ValueError, TypeError, OSError):
     tokenizer = AutoTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
-
-_tok_cls = type(tokenizer).__name__
-print(f"Tokenizer class: {_tok_cls}", flush=True)
+    _tok_cls = type(tokenizer).__name__
+    print(f"Tokenizer: {_tok_cls}", flush=True)
+except Exception as e:
+    import traceback
+    print(f"❌ Gagal memuat tokenizer: {e}", flush=True)
+    traceback.print_exc()
+    raise
 
 print("Mengunduh / memuat ONNX model…", flush=True)
 try:
@@ -56,7 +50,7 @@ print(f"Loading ONNX model dari: {onnx_path}", flush=True)
 
 
 def _default_intra_threads() -> int:
-    """CPU untuk matmul BERT: default menyamai jumlah core (dibatasi)."""
+    """CPU untuk matmul BERT: default menyamai jumlah core (dibatasi) — bukan 2 seperti sebelumnya."""
     try:
         n = len(os.sched_getaffinity(0))
     except (AttributeError, OSError):
@@ -75,6 +69,7 @@ print(
 sess_options = ort.SessionOptions()
 sess_options.intra_op_num_threads = _intra
 sess_options.inter_op_num_threads = _inter
+# Graf BERT kebanyakan berantai; paralelisme utama dari intra_op (MatMul), inter_op=1 mengurangi overhead.
 sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 sess_options.enable_mem_pattern = True
@@ -99,45 +94,35 @@ print(f"Input ONNX (urutan): {_ORT_INPUT_ORDER}", flush=True)
 
 
 def _feeds_from_enc(enc: dict) -> dict:
-    """Tensor sesuai urutan graf; salin hanya jika tidak C-contiguous."""
-    out = {}
-    for name in _ORT_INPUT_ORDER:
-        if name not in enc:
-            continue
-        x = enc[name]
-        out[name] = x if x.flags.c_contiguous else np.ascontiguousarray(x)
-    return out
+    """Hanya kirim tensor yang diminta graf + contiguous (kurangi salinan di ORT)."""
+    return {
+        name: np.ascontiguousarray(enc[name])
+        for name in _ORT_INPUT_ORDER
+        if name in enc
+    }
 
 
-def prediksi(teks: str, profile: bool = False):
-    t0_ns = time.perf_counter_ns()
+def prediksi(teks: str):
+    start = time.time()
     enc = tokenizer(
         teks,
         return_tensors="np",
-        max_length=_MAX_SEQ,
+        max_length=128,
         truncation=True,
-        padding=_TOKENIZER_PAD,
+        padding=True,
     )
-    t1_ns = time.perf_counter_ns()
     feeds = _feeds_from_enc(enc)
     if len(feeds) != len(_ORT_INPUT_ORDER):
         missing = set(_ORT_INPUT_ORDER) - set(feeds)
         raise RuntimeError(f"Input ONNX hilang dari tokenizer: {missing}")
-    t2_ns = time.perf_counter_ns()
     logits = session.run(None, feeds)[0]
-    t3_ns = time.perf_counter_ns()
     logits = logits[0]
     m = float(np.max(logits))
     e = np.exp(logits - m)
     probs = e / e.sum()
     pred = int(np.argmax(probs))
-    t4_ns = time.perf_counter_ns()
-
-    def _ms(a: int, b: int) -> float:
-        return round((b - a) / 1_000_000, 2)
-
-    elapsed = _ms(t0_ns, t4_ns)
-    result = {
+    elapsed = round((time.time() - start) * 1000, 1)
+    return {
         "label": "judi" if pred == 1 else "bukan_judi",
         "label_text": "🎰 Judi Online" if pred == 1 else "✅ Bukan Judi Online",
         "confidence": round(float(probs[pred]) * 100, 2),
@@ -145,14 +130,6 @@ def prediksi(teks: str, profile: bool = False):
         "prob_bukan_judi": round(float(probs[0]) * 100, 2),
         "ms": elapsed,
     }
-    if profile:
-        result["_profile"] = {
-            "tokenizer_ms": _ms(t0_ns, t1_ns),
-            "feeds_ms": _ms(t1_ns, t2_ns),
-            "onnx_ms": _ms(t2_ns, t3_ns),
-            "post_ms": _ms(t3_ns, t4_ns),
-        }
-    return result
 
 
 try:
@@ -176,8 +153,7 @@ def api_prediksi():
         return jsonify({"error": "Teks tidak boleh kosong"}), 400
     if len(teks) > 1000:
         return jsonify({"error": "Teks maksimal 1000 karakter"}), 400
-    prof = request.headers.get("X-Inference-Profile", "").strip() == "1"
-    return jsonify(prediksi(teks, profile=prof))
+    return jsonify(prediksi(teks))
 
 
 @app.route("/api/batch", methods=["POST"])
@@ -188,22 +164,14 @@ def api_batch():
     teks_list = data["teks_list"]
     if len(teks_list) > 50:
         return jsonify({"error": "Maksimal 50 teks per batch"}), 400
-    prof = request.headers.get("X-Inference-Profile", "").strip() == "1"
-    hasil = [{"teks": t, **prediksi(t, profile=prof)} for t in teks_list]
+    hasil = [{"teks": t, **prediksi(t)} for t in teks_list]
     return jsonify({"results": hasil, "total": len(hasil)})
 
 
 @app.route("/api/health")
 def health():
     return jsonify(
-        {
-            "status": "ok",
-            "model": HF_REPO_ID,
-            "runtime": "onnx",
-            "device": "cpu",
-            "tokenizer_pad": _TOKENIZER_PAD,
-            "max_seq_length": _MAX_SEQ,
-        }
+        {"status": "ok", "model": HF_REPO_ID, "runtime": "onnx", "device": "cpu"}
     )
 
 
