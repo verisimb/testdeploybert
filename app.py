@@ -66,9 +66,20 @@ try:
         token=HF_TOKEN,
     )
     model.eval()
-    # Inference cepat di CPU dengan FP32 saja; aman & deterministik.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+
+    # Optional: dynamic INT8 quantization untuk hemat RAM ~4x (FP32 → INT8)
+    # Hanya CPU. Aktifkan dengan TORCH_QUANTIZE=1 di env.
+    if device.type == "cpu" and os.environ.get("TORCH_QUANTIZE", "0") == "1":
+        print("Menerapkan dynamic INT8 quantization (Linear)…", flush=True)
+        model = torch.quantization.quantize_dynamic(
+            model,
+            {torch.nn.Linear},
+            dtype=torch.qint8,
+        )
+        print("Quantization selesai.", flush=True)
+
     print(f"Model: {type(model).__name__} | device: {device}", flush=True)
 except Exception as e:
     import traceback

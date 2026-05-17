@@ -8,6 +8,12 @@ services:
     environment:
       - HF_REPO_ID=verisimb/indobert2
       - HF_TOKEN=hf_xxxx... # ganti dengan token Read kamu (kosongkan jika repo public)
+      # Pin thread ke 3 (VPS 4 core, sisakan 1 untuk OS/Coolify) — selaras dengan
+      # Coolify Resource Limits → Number of CPUs = 3.
+      - TORCH_NUM_THREADS=3
+      - TORCH_INTER_OP_THREADS=1
+      - OMP_NUM_THREADS=3
+      - MKL_NUM_THREADS=3
     # Cache model HuggingFace agar tidak download ulang tiap restart
     volumes:
       - hf_cache:/root/.cache/huggingface

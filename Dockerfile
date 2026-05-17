@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/wh
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
+COPY gunicorn_conf.py .
 COPY templates/ templates/
 
 # Coolify/PaaS: ikuti env PORT agar tidak 502 Bad Gateway
@@ -29,4 +30,14 @@ EXPOSE 5000
 ENV GUNICORN_WORKERS=1
 
 # Timeout 180s untuk unduh model pertama kali; exec = gunicorn sebagai PID 1
-CMD exec gunicorn --workers ${GUNICORN_WORKERS:-1} --bind 0.0.0.0:$PORT --timeout 180 --preload app:app
+# --max-requests recycling mengurangi memory creep dari aktivasi PyTorch (CPU arena).
+CMD exec gunicorn \
+    --workers ${GUNICORN_WORKERS:-1} \
+    --bind 0.0.0.0:$PORT \
+    --timeout 180 \
+    --graceful-timeout 30 \
+    --max-requests 200 \
+    --max-requests-jitter 50 \
+    --preload \
+    --config /app/gunicorn_conf.py \
+    app:app
