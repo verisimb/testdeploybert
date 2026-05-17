@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/wh
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
-COPY gunicorn_conf.py .
 COPY templates/ templates/
 
 # Coolify/PaaS: ikuti env PORT agar tidak 502 Bad Gateway
