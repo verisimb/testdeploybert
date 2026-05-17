@@ -31,6 +31,9 @@ ENV GUNICORN_WORKERS=1
 
 # Timeout 180s untuk unduh model pertama kali; exec = gunicorn sebagai PID 1
 # --max-requests recycling mengurangi memory creep dari aktivasi PyTorch (CPU arena).
+# CATATAN: TIDAK pakai --preload. Kombinasi --preload + OpenMP/MKL (yang dipakai
+# torch CPU) + fork() di Linux menyebabkan deadlock di worker (request hang
+# selamanya). Tanpa --preload, model di-load di setiap worker secara independen.
 CMD exec gunicorn \
     --workers ${GUNICORN_WORKERS:-1} \
     --bind 0.0.0.0:$PORT \
@@ -38,6 +41,4 @@ CMD exec gunicorn \
     --graceful-timeout 30 \
     --max-requests 200 \
     --max-requests-jitter 50 \
-    --preload \
-    --config /app/gunicorn_conf.py \
     app:app

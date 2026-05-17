@@ -116,6 +116,10 @@ def prediksi(teks: str):
 
 
 # Warmup biar request pertama tidak lambat (alokasi tensor + JIT).
+# Catatan: jangan jalankan di master saat --preload + fork() di Linux,
+# karena OpenMP/MKL threadpool ter-init sebelum fork → worker deadlock.
+# Sekarang gunicorn jalan tanpa --preload, jadi import-time warmup aman:
+# app.py diimpor di setiap worker, OpenMP init di proses worker itu sendiri.
 try:
     prediksi("warmup satu kali untuk cache allocator")
 except Exception as _warm_e:
