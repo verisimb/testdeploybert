@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
-from transformers import AutoTokenizer
-from huggingface_hub import hf_hub_download
-import onnxruntime as ort
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+import torch.nn.functional as F
 import numpy as np
 import os
 import time
@@ -9,7 +9,7 @@ import time
 app = Flask(__name__)
 
 # ── Config ──
-HF_REPO_ID = os.environ.get("HF_REPO_ID", "verisimb/testindobertjudol").strip()
+HF_REPO_ID = os.environ.get("HF_REPO_ID", "verisimb/indobert2").strip()
 _raw_token = os.environ.get("HF_TOKEN", "").strip()
 HF_TOKEN = _raw_token or None  # None = akses anonim (repo public)
 
@@ -21,36 +21,11 @@ if HF_TOKEN is None:
     )
 
 print(f"HF_REPO_ID: {HF_REPO_ID}", flush=True)
-print("Loading tokenizer dari Hugging Face…", flush=True)
-
-try:
-    tokenizer = AutoTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
-    _tok_cls = type(tokenizer).__name__
-    print(f"Tokenizer: {_tok_cls}", flush=True)
-except Exception as e:
-    import traceback
-    print(f"❌ Gagal memuat tokenizer: {e}", flush=True)
-    traceback.print_exc()
-    raise
-
-print("Mengunduh / memuat ONNX model…", flush=True)
-try:
-    onnx_path = hf_hub_download(
-        repo_id=HF_REPO_ID,
-        filename="model.onnx",
-        token=HF_TOKEN,
-    )
-except Exception as e:
-    import traceback
-    print(f"❌ Gagal mengunduh model.onnx: {e}", flush=True)
-    traceback.print_exc()
-    raise
-
-print(f"Loading ONNX model dari: {onnx_path}", flush=True)
 
 
+# ── Threading PyTorch (CPU) ──
 def _default_intra_threads() -> int:
-    """CPU untuk matmul BERT: default menyamai jumlah core (dibatasi) — bukan 2 seperti sebelumnya."""
+    """CPU untuk matmul BERT: default menyamai jumlah core (dibatasi)."""
     try:
         n = len(os.sched_getaffinity(0))
     except (AttributeError, OSError):
@@ -58,68 +33,65 @@ def _default_intra_threads() -> int:
     return max(1, min(n, 8))
 
 
-_intra = int(os.environ.get("ONNX_NUM_THREADS", str(_default_intra_threads())))
-_inter = int(os.environ.get("ONNX_INTER_OP_THREADS", "1"))
+_intra = int(os.environ.get("TORCH_NUM_THREADS", str(_default_intra_threads())))
+_inter = int(os.environ.get("TORCH_INTER_OP_THREADS", "1"))
+torch.set_num_threads(_intra)
+try:
+    torch.set_num_interop_threads(_inter)
+except RuntimeError:
+    # set_num_interop_threads hanya boleh dipanggil sebelum operasi paralel pertama
+    pass
 print(
-    f"ONNX Runtime threads: intra_op={_intra}, inter_op={_inter} "
-    f"(override via ONNX_NUM_THREADS / ONNX_INTER_OP_THREADS)",
+    f"PyTorch threads: intra_op={_intra}, inter_op={_inter} "
+    f"(override via TORCH_NUM_THREADS / TORCH_INTER_OP_THREADS)",
     flush=True,
 )
 
-sess_options = ort.SessionOptions()
-sess_options.intra_op_num_threads = _intra
-sess_options.inter_op_num_threads = _inter
-# Graf BERT kebanyakan berantai; paralelisme utama dari intra_op (MatMul), inter_op=1 mengurangi overhead.
-sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-sess_options.enable_mem_pattern = True
-sess_options.enable_cpu_mem_arena = True
 
+# ── Load tokenizer & model ──
+print("Loading tokenizer dari Hugging Face…", flush=True)
 try:
-    session = ort.InferenceSession(
-        onnx_path,
-        sess_options=sess_options,
-        providers=["CPUExecutionProvider"],
-    )
+    tokenizer = AutoTokenizer.from_pretrained(HF_REPO_ID, token=HF_TOKEN)
+    print(f"Tokenizer: {type(tokenizer).__name__}", flush=True)
 except Exception as e:
     import traceback
-    print(f"❌ Gagal memuat sesi ONNX: {e}", flush=True)
+    print(f"❌ Gagal memuat tokenizer: {e}", flush=True)
     traceback.print_exc()
     raise
 
-print("ONNX model berhasil dimuat!", flush=True)
+print("Loading model PyTorch dari Hugging Face…", flush=True)
+try:
+    model = AutoModelForSequenceClassification.from_pretrained(
+        HF_REPO_ID,
+        token=HF_TOKEN,
+    )
+    model.eval()
+    # Inference cepat di CPU dengan FP32 saja; aman & deterministik.
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    print(f"Model: {type(model).__name__} | device: {device}", flush=True)
+except Exception as e:
+    import traceback
+    print(f"❌ Gagal memuat model: {e}", flush=True)
+    traceback.print_exc()
+    raise
 
-_ORT_INPUT_ORDER = [inp.name for inp in session.get_inputs()]
-print(f"Input ONNX (urutan): {_ORT_INPUT_ORDER}", flush=True)
+print("Model berhasil dimuat!", flush=True)
 
 
-def _feeds_from_enc(enc: dict) -> dict:
-    """Hanya kirim tensor yang diminta graf + contiguous (kurangi salinan di ORT)."""
-    return {
-        name: np.ascontiguousarray(enc[name])
-        for name in _ORT_INPUT_ORDER
-        if name in enc
-    }
-
-
+@torch.inference_mode()
 def prediksi(teks: str):
     start = time.time()
     enc = tokenizer(
         teks,
-        return_tensors="np",
+        return_tensors="pt",
         max_length=128,
         truncation=True,
         padding=True,
     )
-    feeds = _feeds_from_enc(enc)
-    if len(feeds) != len(_ORT_INPUT_ORDER):
-        missing = set(_ORT_INPUT_ORDER) - set(feeds)
-        raise RuntimeError(f"Input ONNX hilang dari tokenizer: {missing}")
-    logits = session.run(None, feeds)[0]
-    logits = logits[0]
-    m = float(np.max(logits))
-    e = np.exp(logits - m)
-    probs = e / e.sum()
+    enc = {k: v.to(device) for k, v in enc.items()}
+    logits = model(**enc).logits[0]
+    probs = F.softmax(logits, dim=-1).cpu().numpy()
     pred = int(np.argmax(probs))
     elapsed = round((time.time() - start) * 1000, 1)
     return {
@@ -132,6 +104,7 @@ def prediksi(teks: str):
     }
 
 
+# Warmup biar request pertama tidak lambat (alokasi tensor + JIT).
 try:
     prediksi("warmup satu kali untuk cache allocator")
 except Exception as _warm_e:
@@ -171,7 +144,12 @@ def api_batch():
 @app.route("/api/health")
 def health():
     return jsonify(
-        {"status": "ok", "model": HF_REPO_ID, "runtime": "onnx", "device": "cpu"}
+        {
+            "status": "ok",
+            "model": HF_REPO_ID,
+            "runtime": "pytorch",
+            "device": str(device),
+        }
     )
 
 

@@ -6,8 +6,8 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - HF_REPO_ID=verisimb/testindobertjudol
-      - HF_TOKEN=hf_xxxx...   # ganti dengan token Read kamu
+      - HF_REPO_ID=verisimb/indobert2
+      - HF_TOKEN=hf_xxxx... # ganti dengan token Read kamu (kosongkan jika repo public)
     # Cache model HuggingFace agar tidak download ulang tiap restart
     volumes:
       - hf_cache:/root/.cache/huggingface

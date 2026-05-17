@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-# Jangan membatasi OMP ke 2 — memperlambat matmul/CPU; atur paralelisme lewat ONNX_NUM_THREADS di app.py
+# Atur paralelisme lewat TORCH_NUM_THREADS di app.py (jangan batasi OMP global)
 ENV TOKENIZERS_PARALLELISM=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install torch CPU-only dulu (hemat ~1.5GB image vs wheel default berisi CUDA),
+# lalu sisanya. Index extra hanya dipakai kalau paket tidak ada di PyPI.
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu \
+        "torch>=2.1.0" \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY templates/ templates/
@@ -24,5 +28,5 @@ EXPOSE 5000
 # 1 worker = latensi lebih stabil di CPU (2 worker sering rebutan core). Naikkan via GUNICORN_WORKERS jika perlu throughput.
 ENV GUNICORN_WORKERS=1
 
-# Timeout 180s untuk unduh model ONNX pertama kali; exec = gunicorn sebagai PID 1
+# Timeout 180s untuk unduh model pertama kali; exec = gunicorn sebagai PID 1
 CMD exec gunicorn --workers ${GUNICORN_WORKERS:-1} --bind 0.0.0.0:$PORT --timeout 180 --preload app:app
