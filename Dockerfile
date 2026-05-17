@@ -23,8 +23,8 @@ COPY gunicorn_conf.py .
 COPY templates/ templates/
 
 # Coolify/PaaS: ikuti env PORT agar tidak 502 Bad Gateway
-ENV PORT=5000
-EXPOSE 5000
+ENV PORT=3000
+EXPOSE 3000
 
 # 1 worker = latensi lebih stabil di CPU (2 worker sering rebutan core). Naikkan via GUNICORN_WORKERS jika perlu throughput.
 ENV GUNICORN_WORKERS=1
