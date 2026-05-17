@@ -7,6 +7,12 @@ lazy-init di process worker yang baru.
 
 from __future__ import annotations
 
+import sys
+
+
+def on_starting(server):
+    print("[gunicorn_conf] on_starting: config dipakai.", flush=True, file=sys.stderr)
+
 
 def post_fork(server, worker):
     """Dijalankan di setiap worker child setelah fork dari master.

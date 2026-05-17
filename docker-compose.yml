@@ -3,9 +3,13 @@ services:
     build: .
     container_name: judi-detector
     restart: unless-stopped
-    ports:
-      - "5000:5000"
+    # Coolify mengelola reverse proxy → cukup `expose`, jangan `ports`
+    # (publish port langsung bisa bentrok dengan layer Traefik Coolify).
+    expose:
+      - "3000"
     environment:
+      # Coolify men-set PORT=3000 secara default; samakan agar healthcheck/proxy match.
+      - PORT=3000
       - HF_REPO_ID=verisimb/indobert2
       - HF_TOKEN=hf_xxxx... # ganti dengan token Read kamu (kosongkan jika repo public)
       # Pin thread ke 3 (VPS 4 core, sisakan 1 untuk OS/Coolify) — selaras dengan
